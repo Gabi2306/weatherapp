@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather Forecast</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <div class="app-header">
+      <h1>Weather Forecast</h1>
+      <div class="search-box">
+        <input type="text" placeholder="Search for a city..." id="search-input">
+        <button id="search-btn"><i class="fas fa-search"></i></button>
+      </div>
+      <button id="location-btn" class="location-btn" title="Get your location">
+        <i class="fas fa-location-arrow"></i>
+      </button>
+    </div>
+    
+    <div class="loader hidden" id="loader">
+      <div class="spinner"></div>
+      <p>Getting weather data...</p>
+    </div>
+    
+    <div class="weather-info hidden" id="weather-container">
+      <div class="current-weather">
+        <div class="current-header">
+          <div>
+            <h2 id="city-name">City Name</h2>
+            <p id="current-date">Current Date</p>
+          </div>
+          <div class="temp-unit-toggle">
+            <button id="celsius-btn" class="active">°C</button>
+            <button id="fahrenheit-btn">°F</button>
+          </div>
+        </div>
+        
+        <div class="current-details">
+          <div class="weather-icon-container">
+            <i id="weather-icon" class="weather-icon"></i>
+            <p id="weather-description">Weather Description</p>
+          </div>
+          
+          <div class="temperature">
+            <h1 id="temperature">--</h1>
+            <span id="temp-unit">°C</span>
+          </div>
+        </div>
+        
+        <div class="weather-stats">
+          <div class="stat">
+            <i class="fas fa-temperature-high"></i>
+            <div>
+              <p id="feels-like">--</p>
+              <p>Feels Like</p>
+            </div>
+          </div>
+          <div class="stat">
+            <i class="fas fa-water"></i>
+            <div>
+              <p id="humidity">--</p>
+              <p>Humidity</p>
+            </div>
+          </div>
+          <div class="stat">
+            <i class="fas fa-wind"></i>
+            <div>
+              <p id="wind-speed">--</p>
+              <p>Wind</p>
+            </div>
+          </div>
+          <div class="stat">
+            <i class="fas fa-compress-arrows-alt"></i>
+            <div>
+              <p id="pressure">--</p>
+              <p>Pressure</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="forecast" id="forecast-container">
+        <h3>7-Day Forecast</h3>
+        <div class="forecast-days" id="forecast-days">
+          <!-- Forecast days will be added here by JavaScript -->
+        </div>
+      </div>
+    </div>
+    
+    <div id="error-message" class="error hidden">
+      <i class="fas fa-exclamation-circle"></i>
+      <p>City not found. Please try again.</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>Weather data provided by <a href="https://openweathermap.org/" target="_blank">OpenWeatherMap</a></p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
