@@ -1,5 +1,5 @@
 // API key for OpenWeatherMap
-const apiKey = "YOUR_API_KEY" // Replace with your actual API key
+const apiKey = "c3bfd7e4191d3857ff73b4dd9952795e" // Using the new provided API key
 
 // DOM elements
 const searchInput = document.getElementById("search-input")
@@ -58,23 +58,81 @@ fahrenheitBtn.addEventListener("click", () => {
   }
 })
 
+// Function to verify API key is working
+async function verifyApiKey() {
+  try {
+    // Test the API key with a simple request
+    const testResponse = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?q=London&units=metric&appid=${apiKey}`,
+    )
+
+    if (!testResponse.ok) {
+      const errorData = await testResponse.json()
+      throw new Error(`API key verification failed: ${errorData.message}`)
+    }
+
+    console.log("API key verified successfully")
+    return true
+  } catch (error) {
+    console.error("API key verification failed:", error)
+    showError(`API key error: ${error.message}. Please check your API key.`)
+    return false
+  }
+}
+
 // Function to get user's location
 function getUserLocation() {
   showLoader()
+
+  // Add a timeout to handle cases where geolocation takes too long
+  const locationTimeout = setTimeout(() => {
+    hideLoader()
+    showError("Location request timed out. Please search for a city instead.")
+  }, 15000)
+
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        clearTimeout(locationTimeout)
+        console.log("Got user location:", position.coords.latitude, position.coords.longitude)
         getWeatherByCoordinates(position.coords.latitude, position.coords.longitude)
       },
       (error) => {
+        clearTimeout(locationTimeout)
         hideLoader()
-        showError(`Geolocation error: ${error.message}`)
+
+        let errorMsg = "Unable to get your location. "
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMsg += "Please allow location access and try again."
+            break
+          case error.POSITION_UNAVAILABLE:
+            errorMsg += "Location information is unavailable."
+            break
+          case error.TIMEOUT:
+            errorMsg += "Location request timed out."
+            break
+          default:
+            errorMsg += "An unknown error occurred."
+        }
+
         console.error("Geolocation error:", error)
+        showError(errorMsg)
+
+        // As a fallback, try to get location by IP
+        getLocationByIP()
+      },
+      {
+        timeout: 10000,
+        maximumAge: 60000,
+        enableHighAccuracy: false,
       },
     )
   } else {
+    clearTimeout(locationTimeout)
     hideLoader()
-    showError("Geolocation is not supported by your browser")
+    showError("Geolocation is not supported by your browser. Please search for a city instead.")
   }
 }
 
@@ -91,17 +149,19 @@ async function getWeatherByCity(city) {
     )
 
     if (!currentWeatherResponse.ok) {
-      throw new Error("City not found")
+      const errorData = await currentWeatherResponse.json()
+      throw new Error(`City not found: ${errorData.message}`)
     }
 
     currentWeatherData = await currentWeatherResponse.json()
+    console.log("Current weather data for city:", currentWeatherData)
 
     // Get forecast data (One Call API for 7-day forecast)
     const { lat, lon } = currentWeatherData.coord
     await getOneCallData(lat, lon)
   } catch (error) {
     hideLoader()
-    showError("City not found. Please try again.")
+    showError(`Error: ${error.message}`)
     console.error("Error fetching weather data:", error)
   }
 }
@@ -109,38 +169,70 @@ async function getWeatherByCity(city) {
 // Function to get weather by coordinates
 async function getWeatherByCoordinates(lat, lon) {
   try {
+    console.log(`Fetching weather data for coordinates: ${lat}, ${lon}`)
+
     // Get current weather
-    const currentWeatherResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`,
-    )
+    const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
+    console.log("Current weather URL:", currentWeatherUrl)
+
+    const currentWeatherResponse = await fetch(currentWeatherUrl)
 
     if (!currentWeatherResponse.ok) {
-      throw new Error("Weather data not available")
+      const errorData = await currentWeatherResponse.json()
+      console.error("Current weather API error:", errorData)
+      throw new Error(`Weather data not available: ${errorData.message}`)
     }
 
     currentWeatherData = await currentWeatherResponse.json()
+    console.log("Current weather data:", currentWeatherData)
 
-    // Get forecast data (One Call API)
+    // Get forecast data
     await getOneCallData(lat, lon)
   } catch (error) {
     hideLoader()
-    showError("Unable to get weather data for your location")
     console.error("Error fetching weather data:", error)
+    showError(`Unable to get weather data: ${error.message}`)
+
+    // Show search box as fallback
+    document.querySelector(".search-box").style.display = "flex"
+    document.querySelector(".app-header h1").style.marginBottom = "20px"
   }
 }
 
 // Function to get One Call API data (includes current, hourly, and daily forecast)
 async function getOneCallData(lat, lon) {
   try {
-    const oneCallResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&units=metric&exclude=minutely,alerts&appid=${apiKey}`,
-    )
+    // Use the 5-day forecast API
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
+    console.log("Forecast URL:", forecastUrl)
 
-    if (!oneCallResponse.ok) {
-      throw new Error("Forecast data not available")
+    const forecastResponse = await fetch(forecastUrl)
+
+    if (!forecastResponse.ok) {
+      const errorData = await forecastResponse.json()
+      console.error("Forecast API error:", errorData)
+      throw new Error(`Forecast data not available: ${errorData.message}`)
     }
 
-    forecastData = await oneCallResponse.json()
+    const forecastRawData = await forecastResponse.json()
+    console.log("Forecast raw data received")
+
+    if (!forecastRawData.list || forecastRawData.list.length === 0) {
+      throw new Error("No forecast data available in the API response")
+    }
+
+    // Process the 5-day forecast data to create a daily forecast
+    forecastData = {
+      current: {
+        temp: currentWeatherData.main.temp,
+        feels_like: currentWeatherData.main.feels_like,
+        humidity: currentWeatherData.main.humidity,
+        pressure: currentWeatherData.main.pressure,
+        wind_speed: currentWeatherData.wind.speed,
+        weather: currentWeatherData.weather,
+      },
+      daily: processForecastData(forecastRawData.list),
+    }
 
     // Display weather data
     displayCurrentWeather()
@@ -152,9 +244,42 @@ async function getOneCallData(lat, lon) {
     errorMessage.classList.add("hidden")
   } catch (error) {
     hideLoader()
-    showError("Unable to get forecast data")
     console.error("Error fetching forecast data:", error)
+    showError(`Unable to get forecast data: ${error.message}`)
   }
+}
+
+// Add this new function to process the forecast data
+function processForecastData(forecastList) {
+  // Group forecast by day
+  const dailyData = {}
+
+  forecastList.forEach((item) => {
+    const date = new Date(item.dt * 1000)
+    const day = date.toISOString().split("T")[0]
+
+    if (!dailyData[day]) {
+      dailyData[day] = {
+        dt: date.getTime() / 1000,
+        temp: {
+          min: item.main.temp_min,
+          max: item.main.temp_max,
+        },
+        weather: item.weather,
+      }
+    } else {
+      // Update min/max temperatures
+      if (item.main.temp_min < dailyData[day].temp.min) {
+        dailyData[day].temp.min = item.main.temp_min
+      }
+      if (item.main.temp_max > dailyData[day].temp.max) {
+        dailyData[day].temp.max = item.main.temp_max
+      }
+    }
+  })
+
+  // Convert to array and sort by date
+  return Object.values(dailyData).sort((a, b) => a.dt - b.dt)
 }
 
 // Function to display current weather
@@ -205,8 +330,10 @@ function displayForecast() {
 
   forecastDays.innerHTML = ""
 
-  // Display 7-day forecast
-  forecastData.daily.slice(0, 7).forEach((day, index) => {
+  // Display 7-day forecast (or as many days as we have)
+  const daysToShow = Math.min(forecastData.daily.length, 7)
+
+  forecastData.daily.slice(0, daysToShow).forEach((day, index) => {
     const date = new Date(day.dt * 1000)
     const dayName = index === 0 ? "Today" : formatDate(date, "day")
     const maxTemp = isMetric ? day.temp.max : celsiusToFahrenheit(day.temp.max)
@@ -287,14 +414,13 @@ function celsiusToFahrenheit(celsius) {
 
 // Helper function to format date
 function formatDate(date, format) {
-  const options = {
-    day: "short", // 'numeric', '2-digit'
-    month: "short", // 'numeric', '2-digit', 'narrow', 'short', 'long'
-    year: "numeric",
-    weekday: "short", // 'narrow', 'short', 'long'
-  }
-
   if (format === "full") {
+    const options = {
+      day: "numeric", // Changed from "short" to "numeric"
+      month: "short",
+      year: "numeric",
+      weekday: "short",
+    }
     return date.toLocaleDateString("en-US", options)
   } else if (format === "day") {
     return date.toLocaleDateString("en-US", { weekday: "short" })
@@ -322,6 +448,55 @@ function showError(message) {
   weatherContainer.classList.add("hidden")
 }
 
-// Initialize the app - try to get user's location on page load
-window.addEventListener("load", getUserLocation)
+// Add this new function to get location by IP as a fallback
+async function getLocationByIP() {
+  try {
+    console.log("Attempting to get location by IP...")
+    const response = await fetch("https://ipapi.co/json/")
+    const data = await response.json()
+
+    if (data.latitude && data.longitude) {
+      console.log("Got location by IP:", data.latitude, data.longitude)
+      getWeatherByCoordinates(data.latitude, data.longitude)
+    } else {
+      // If we can't get coordinates, try to get weather by city name
+      if (data.city) {
+        console.log("Got city by IP:", data.city)
+        getWeatherByCity(data.city)
+      } else {
+        // Default to a major city if all else fails
+        getWeatherByCity("New York")
+      }
+    }
+  } catch (error) {
+    console.error("Error getting location by IP:", error)
+    // Default to a major city if all else fails
+    getWeatherByCity("New York")
+  }
+}
+
+// Initialize the app
+window.addEventListener("load", async () => {
+  console.log("Weather app initializing...")
+  console.log("Using API key:", apiKey)
+
+  // First verify the API key
+  const isApiKeyValid = await verifyApiKey()
+
+  if (isApiKeyValid) {
+    // Try to get user location
+    getUserLocation()
+
+    // Add a fallback - if after 5 seconds we still don't have weather data, try IP location
+    setTimeout(() => {
+      if (!currentWeatherData && !document.querySelector(".error:not(.hidden)")) {
+        console.log("No weather data after timeout, trying IP fallback...")
+        getLocationByIP()
+      }
+    }, 5000)
+  } else {
+    // If API key is invalid, show a clear error message
+    showError("Invalid API key. Please check your OpenWeatherMap API key.")
+  }
+})
 
